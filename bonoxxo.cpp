@@ -2,6 +2,7 @@
 #include <iostream>
 #include <numeric>
 #include <vector>
+#include <memory>
 
 using namespace std;
 
@@ -12,14 +13,6 @@ public:
   Cell() : c_(CellValue::Empty) {}
 
   Cell(CellValue c) : c_(c) {}
-
-  /*Cell& operator=(const Cell &other) {
-    if (this == &other)
-      return *this;
-
-    this->c_ = other.getValue();
-    return *this;
-  }*/
 
   // Cell(CellValue value): c_(value) {};
   CellValue getValue() const { return c_; }
@@ -40,120 +33,176 @@ private:
   CellValue c_;
 };
 
-class Binoxxo {
-
+class VLine {
 public:
-  Binoxxo() = default;
-  Binoxxo(vector<vector<char>> input) {
-    for (auto line : input) {
-      vector<Cell *> new_line;
-      for (auto c : line) {
-        if (c == 'X') {
-          new_line.emplace_back(new Cell(CellValue::X));
-          continue;
-        }
-        if (c == 'O') {
-          new_line.emplace_back(new Cell(CellValue::O));
-          continue;
-        }
-        new_line.emplace_back(new Cell(CellValue::Empty));
-      }
-      binoxxo.emplace_back(new_line);
+  VLine() = default;
+  VLine(const std::vector<CellValue>& line, bool is_line) : is_line_(is_line) {
+    values_.clear();
+    values_.reserve(line.size());
+    for (auto &l : line) {
+      values_.emplace_back(l);
     }
   }
 
-  unsigned getSize() { return binoxxo.size(); }
-
-  vector<Cell *> getLine(int line_nr) { return binoxxo[line_nr]; }
-
-  vector<Cell *> getRow(int row_nr) {
-    vector<Cell *> row = {};
-    for (auto &i : binoxxo) {
-      row.push_back(i[row_nr]);
-    }
-    return row;
+  unsigned countX() {
+    return std::count_if(values_.begin(), values_.end(),
+                         [](Cell c) { return c.getValue() == CellValue::X; });
   }
 
-  bool solved() {
-    for (auto line : binoxxo) {
-      if (any_of(line.begin(), line.end(),
-                 [](Cell *c) { return c->getValue() == CellValue::Empty; })) {
-        return false;
-      }
-    }
-    return true;
+  unsigned countO() {
+    return std::count_if(values_.begin(), values_.end(),
+                         [](Cell c) { return c.getValue() == CellValue::O; });
   }
 
-  bool isLineValidSolved(vector<Cell> line, bool is_line) {
-    unsigned c_empty = std::count_if(line.begin(), line.end(), [](Cell c) {
+  unsigned countE() {
+    return std::count_if(values_.begin(), values_.end(), [](Cell c) {
       return c.getValue() == CellValue::Empty;
     });
-    unsigned c_x = std::count_if(line.begin(), line.end(), [](Cell c) {
-      return c.getValue() == CellValue::X;
-    });
-    unsigned c_o = std::count_if(line.begin(), line.end(), [](Cell c) {
-      return c.getValue() == CellValue::O;
-    });
-    if (c_empty > 0 || c_x != c_o) {
+  }
+
+  unsigned size() { return values_.size(); }
+
+  bool isValid() {
+    if (countO() != countX()) {
       return false;
     }
 
-    CellValue prev = line[1].getValue();
-    CellValue prevprev = line[0].getValue();
-    for (int i = 2; i < line.size(); i++) {
-      if (prev == prevprev && prev == line[i].getValue())
+    CellValue prev = values_[1];
+    CellValue prevprev = values_[0];
+    for (int i = 2; i < values_.size(); i++) {
+      if (prev == prevprev && prev == values_[i])
         return false;
       prevprev = prev;
-      prev = line[i].getValue();
-    }
-
-    if (is_line) {
-      for (unsigned i = 0; i < getSize(); i++) {
-
-        auto check_line = getLine(i);
-        unsigned c_empty =
-            std::count_if(check_line.begin(), check_line.end(), [](Cell *c) {
-              return c->getValue() == CellValue::Empty;
-            });
-        if (c_empty == 0) {
-          bool equal = true;
-          // compare
-          for (int j = 0; j < check_line.size(); j++) {
-            if (check_line[j]->getValue() != line[j].getValue()) {
-              equal = false;
-            }
-          }
-          if (equal) {
-            return false;
-          }
-        }
-      }
-    } else {
-      for (unsigned i = 0; i < getSize(); i++) {
-
-        auto check_line = getRow(i);
-        unsigned c_empty =
-            std::count_if(check_line.begin(), check_line.end(), [](Cell *c) {
-              return c->getValue() == CellValue::Empty;
-            });
-        if (c_empty == 0) {
-          bool equal = true;
-          // compare
-          for (int j = 0; j < check_line.size(); j++) {
-            if (check_line[j]->getValue() != line[j].getValue()) {
-              equal = false;
-            }
-          }
-          if (equal) {
-            return false;
-          }
-        }
-      }
+      prev = values_[i];
     }
     return true;
   }
 
-  vector<vector<CellValue>> getArrangements(int x_c, int o_c) {
+  bool isSolved() { return countE() == 0; }
+
+  bool operator==(const VLine &lhs) { return lhs.getValues() == values_; }
+
+  VLine operator&(const VLine &lhs) {
+    VLine result{{}, is_line_};
+
+    for (int i = 0; i < values_.size(); ++i) {
+      if (values_[i] == lhs.getValues()[i]) {
+        result.addValue(values_[i]);
+      } else {
+        result.addValue(CellValue::Empty);
+      }
+    }
+    return result;
+  }
+
+  bool isLine() const { return is_line_; }
+
+  vector<CellValue> getValues() const { return values_; }
+
+  CellValue getValue(unsigned line_nr) { return values_[line_nr]; }
+
+  void addValue(CellValue value) { values_.emplace_back(value); }
+
+  void setIsLine(bool is_line) {
+    is_line_ = is_line;
+  }
+
+private:
+  vector<CellValue> values_;
+  bool is_line_ = true;
+};
+
+class BLine {
+public:
+  BLine() = default;
+  BLine(bool is_line) : is_line_(is_line){};
+
+  void addValue(const shared_ptr<Cell>& c) { line_.emplace_back(c); }
+
+  bool solved() {
+    return !any_of(line_.begin(), line_.end(), [](const shared_ptr<Cell>& c) {
+          return c->getValue() == CellValue::Empty;
+        });
+  }
+
+  VLine getVLine() const {
+    vector<CellValue> values;
+    std::transform(line_.begin(), line_.end(), std::back_inserter(values),
+                   [](const shared_ptr<Cell>& c) { return c->getValue(); });
+    return {values, is_line_};
+  }
+
+  void setValue(unsigned i, CellValue value) { line_[i]->setValue(value); }
+
+  void print() const {
+    for(auto & c: line_)
+    {
+      cout << c->toString() << ' ';
+    }
+  }
+
+  void setIsLine(bool is_line) {
+    is_line_ = is_line;
+  }
+
+private:
+  vector<std::shared_ptr<Cell>> line_;
+  bool is_line_ = true;
+};
+
+class Binoxxo {
+
+public:
+  explicit Binoxxo(vector<vector<char>> input) {
+    lines_.clear();
+    rows_.clear();
+    lines_ = vector<BLine>(input.size());
+    rows_ = vector<BLine>(input.size());
+
+    for (int i = 0; i < input.size(); i++) {
+      for (int j = 0; j < input[i].size(); j++) {
+        char c = input[i][j];
+        CellValue value = CellValue::Empty;
+        if (c == 'X') {
+          value = CellValue::X;
+        }
+        if (c == 'O') {
+          value = CellValue::O;
+        }
+        shared_ptr<Cell> p = make_shared<Cell>(value);
+        lines_[i].addValue(p);
+        rows_[j].addValue(p);
+
+        lines_[i].setIsLine(true);
+        rows_[j].setIsLine(false);
+      }
+    }
+  }
+
+  unsigned getSize() { return lines_.size(); }
+
+  bool solved() {
+    return (all_of(lines_.begin(), lines_.end(),
+                   [](BLine l) { return l.solved(); }));
+  }
+
+  bool isLineValidSolved(VLine line) {
+
+    bool complete = line.isValid() && line.isSolved();
+
+    if (!complete)
+      return false;
+
+    if (line.isLine()) {
+      return none_of(lines_.begin(), lines_.end(),
+                     [line](const BLine& b) { return b.getVLine() == line; });
+    } else {
+      return none_of(rows_.begin(), rows_.end(),
+                     [line](const BLine& b) { return b.getVLine() == line; });
+    }
+  }
+
+  vector<vector<CellValue>> getArrangements(unsigned x_c, unsigned o_c) {
 
     if (x_c == 1 && o_c == 0) {
       return {{CellValue::X}};
@@ -181,34 +230,32 @@ public:
     return all_arrs;
   }
 
-  vector<vector<Cell>> getValidSolutions(vector<Cell *> input, bool is_line) {
+  vector<VLine> getValidSolutions(VLine input) {
 
-    unsigned c_x = std::count_if(input.begin(), input.end(), [](Cell *c) {
-      return c->getValue() == CellValue::X;
-    });
-    unsigned c_o = std::count_if(input.begin(), input.end(), [](Cell *c) {
-      return c->getValue() == CellValue::O;
-    });
+    unsigned c_x = input.countX();
+    unsigned c_o = input.countO();
 
     vector<vector<CellValue>> arrs =
-        getArrangements(input.size() / 2 - c_x, input.size() / 2 - c_o);
-    vector<vector<Cell>> solutions(arrs.size());
+        getArrangements(unsigned(input.size() / 2 - c_x), unsigned(input.size() / 2 - c_o));
+
+    vector<VLine> solutions(arrs.size());
     unsigned arr_counter = 0;
     for (unsigned i = 0; i < input.size(); i++) {
       for (unsigned j = 0; j < arrs.size(); j++) {
-        if (input[i]->getValue() == CellValue::Empty) {
-          solutions[j].push_back(arrs[j][arr_counter]);
+        if (input.getValue(i) == CellValue::Empty) {
+          solutions[j].addValue(arrs[j][arr_counter]);
         } else {
-          solutions[j].push_back(input[i]->getValue());
+          solutions[j].addValue(input.getValue(i));
         }
       }
-      if (input[i]->getValue() == CellValue::Empty) {
+      if (input.getValue(i) == CellValue::Empty) {
         arr_counter++;
       }
     }
-    vector<vector<Cell>> valid_solutions;
-    for (auto sol : solutions) {
-      if (isLineValidSolved(sol, is_line)) {
+    vector<VLine> valid_solutions;
+    for (auto& sol : solutions) {
+      sol.setIsLine(input.isLine());
+      if (isLineValidSolved(sol)) {
         valid_solutions.push_back(sol);
       }
     }
@@ -216,76 +263,80 @@ public:
     return valid_solutions;
   }
 
-  bool solveLineTrivial(vector<Cell *> line) {
+  bool solveLineTrivial(unsigned line_nr, bool is_line) {
+    VLine line = lines_[line_nr].getVLine();
+    BLine bline = lines_[line_nr];
+    if (!is_line) {
+      line = rows_[line_nr].getVLine();
+      bline = rows_[line_nr];
+    }
+
     bool found = false;
-    CellValue prev = line[1]->getValue();
-    CellValue prevprev = line[0]->getValue();
+    CellValue prev = line.getValue(1);
+    CellValue prevprev = line.getValue(0);
     CellValue n;
 
     for (int i = 2; i < line.size(); i++) {
-      if (prevprev == CellValue::Empty && prev == line[i]->getValue() &&
+      if (prevprev == CellValue::Empty && prev == line.getValue(i) &&
           prev != CellValue::Empty) {
         if (prev == CellValue::X)
           n = CellValue::O;
         else
           n = CellValue::X;
-        line[i - 2]->setValue(n);
+        bline.setValue(i - 2, n);
         found = true;
       }
 
-      if (prev == prevprev && line[i]->getValue() == CellValue::Empty &&
+      if (prev == prevprev && line.getValue(i) == CellValue::Empty &&
           prev != CellValue::Empty) {
         if (prev == CellValue::X)
           n = CellValue::O;
         else
           n = CellValue::X;
-        line[i]->setValue(n);
+        bline.setValue(i, n);
         found = true;
       }
 
-      if (line[i]->getValue() == prevprev && prev == CellValue::Empty &&
+      if (line.getValue(i) == prevprev && prev == CellValue::Empty &&
           prevprev != CellValue::Empty) {
         if (prevprev == CellValue::X)
           n = CellValue::O;
         else
           n = CellValue::X;
-        line[i - 1]->setValue(n);
+        bline.setValue(i - 1, n);
         found = true;
       }
 
       prevprev = prev;
-      prev = line[i]->getValue();
+      prev = line.getValue(i);
     }
 
     return found;
   }
 
-  bool searchNonTrivialLineSolution(vector<Cell *> line, bool is_line) {
-    auto possible_sols = getValidSolutions(line, is_line);
+  bool searchNonTrivialLineSolution(int line_nr, bool is_line) {
+    VLine line = lines_[line_nr].getVLine();
+    BLine bline = lines_[line_nr];
+    if (!is_line) {
+      line = rows_[line_nr].getVLine();
+      bline = rows_[line_nr];
+    }
 
-    if (possible_sols.size() == 0) {
+    auto possible_sols = getValidSolutions(line);
+
+    if (possible_sols.empty()) {
       return false;
     }
 
-    auto binary_op = [](vector<Cell> left, vector<Cell> right) {
-      vector<Cell> result(left.size());
-      for (unsigned i = 0; i < left.size(); i++) {
-        if (left[i].getValue() == right[i].getValue()) {
-          result[i] = Cell(left[i]);
-        } else {
-          result[i] = Cell(CellValue::Empty);
-        }
-      }
-      return result;
-    };
-    vector<Cell> begin = possible_sols[0];
-    vector<Cell> common = std::accumulate(
-        possible_sols.begin(), possible_sols.end(), begin, binary_op);
+    auto binary_op = [](VLine left, const VLine& right) { return (left & right); };
+    VLine begin = possible_sols[0];
+    VLine common = std::accumulate(possible_sols.begin(), possible_sols.end(),
+                                   begin, binary_op);
 
     for (unsigned i = 0; i < line.size(); i++) {
-      if (line[i]->getValue() == CellValue::Empty &&
-          common[i].getValue() != CellValue::Empty) {
-        line[i]->setValue(common[i].getValue());
+      if (line.getValue(i) == CellValue::Empty &&
+          common.getValue(i) != CellValue::Empty) {
+        bline.setValue(i, common.getValue(i));
         { return true; }
       }
     }
@@ -293,17 +344,16 @@ public:
   }
 
   void print() {
-    for (const auto &line : binoxxo) {
-      for (auto c : line) {
-        cout << c->toString() << ' ';
-      }
-      cout << endl;
+    for (const auto &line : lines_) {
+     line.print();
+     cout << endl;
     }
     cout << "-----------------------" << endl;
   }
 
 private:
-  vector<vector<Cell *>> binoxxo;
+  vector<BLine> lines_;
+  vector<BLine> rows_;
 };
 
 int main() {
@@ -329,7 +379,7 @@ int main() {
 
     for (int i = 0; i < b.getSize(); i++) {
 
-      if (b.solveLineTrivial(b.getLine(i))) {
+      if (b.solveLineTrivial(i, true)) {
         cout << "Trivial Line: " << i << endl;
         found = true;
         break;
@@ -340,7 +390,7 @@ int main() {
       continue;
 
     for (int i = 0; i < b.getSize(); i++) {
-      if (b.solveLineTrivial(b.getRow(i))) {
+      if (b.solveLineTrivial(i, false)) {
         cout << "Trivial Row: " << i << endl;
         found = true;
         break;
@@ -351,7 +401,7 @@ int main() {
 
 
     for (int i = 0; i < b.getSize(); i++) {
-      if (b.searchNonTrivialLineSolution(b.getLine(i), true)) {
+      if (b.searchNonTrivialLineSolution(i, true)) {
         cout << "Non Trivial Line: " << i << endl;
         found = true;
         break;
@@ -361,7 +411,7 @@ int main() {
       continue;
 
     for (int i = 0; i < b.getSize(); i++) {
-      if (b.searchNonTrivialLineSolution(b.getRow(i), false)) {
+      if (b.searchNonTrivialLineSolution(i, false)) {
         cout << "Non Trivial Row: " << i << endl;
         break;
       }
