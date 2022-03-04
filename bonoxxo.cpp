@@ -128,16 +128,21 @@ public:
   VLine getVLine() const {
     vector<CellValue> values;
     std::transform(line_.begin(), line_.end(), std::back_inserter(values),
-                   [](const shared_ptr<Cell>& c) { return c->getValue(); });
+                   [](const shared_ptr<Cell> &c) { return c->getValue(); });
     return {values, is_line_};
   }
 
   void setValue(unsigned i, CellValue value) { line_[i]->setValue(value); }
 
-  void print() const {
-    for(auto & c: line_)
-    {
-      cout << c->toString() << ' ';
+  void print(int highlight) const {
+    int i = 0;
+    for (auto &c : line_) {
+      if (i == highlight)
+        cout << "\e[1m" << c->toString() << "\e[0m" << ' ';
+      else
+        cout << c->toString() << ' ';
+
+      i++;
     }
   }
 
@@ -263,7 +268,7 @@ public:
     return valid_solutions;
   }
 
-  bool solveLineTrivial(unsigned line_nr, bool is_line) {
+  int solveLineTrivial(unsigned line_nr, bool is_line) {
     VLine line = lines_[line_nr].getVLine();
     BLine bline = lines_[line_nr];
     if (!is_line) {
@@ -271,7 +276,6 @@ public:
       bline = rows_[line_nr];
     }
 
-    bool found = false;
     CellValue prev = line.getValue(1);
     CellValue prevprev = line.getValue(0);
     CellValue n;
@@ -284,7 +288,7 @@ public:
         else
           n = CellValue::X;
         bline.setValue(i - 2, n);
-        found = true;
+        return i-2;
       }
 
       if (prev == prevprev && line.getValue(i) == CellValue::Empty &&
@@ -294,7 +298,7 @@ public:
         else
           n = CellValue::X;
         bline.setValue(i, n);
-        found = true;
+        return i;
       }
 
       if (line.getValue(i) == prevprev && prev == CellValue::Empty &&
@@ -304,17 +308,17 @@ public:
         else
           n = CellValue::X;
         bline.setValue(i - 1, n);
-        found = true;
+        return i-1;
       }
 
       prevprev = prev;
       prev = line.getValue(i);
     }
 
-    return found;
+    return -1;
   }
 
-  bool searchNonTrivialLineSolution(int line_nr, bool is_line) {
+  int searchNonTrivialLineSolution(int line_nr, bool is_line) {
     VLine line = lines_[line_nr].getVLine();
     BLine bline = lines_[line_nr];
     if (!is_line) {
@@ -322,6 +326,8 @@ public:
       bline = rows_[line_nr];
     }
 
+    if(line.isSolved())
+      return -1;
     auto possible_sols = getValidSolutions(line);
 
     if (possible_sols.empty()) {
@@ -337,18 +343,25 @@ public:
       if (line.getValue(i) == CellValue::Empty &&
           common.getValue(i) != CellValue::Empty) {
         bline.setValue(i, common.getValue(i));
-        { return true; }
+        { return i; }
       }
     }
-    return false;
+    return -1;
   }
 
-  void print() {
+  void print(int highlight_line, int highlight_row) {
+    int i = 0;
+    int high;
     for (const auto &line : lines_) {
-     line.print();
+     if(i == highlight_line)
+       high = highlight_row;
+     else
+       high = -1;
+     line.print(high);
      cout << endl;
-    }
+     i++;    }
     cout << "-----------------------" << endl;
+
   }
 
 private:
@@ -371,17 +384,22 @@ int main() {
              {'O', '_', '_', '_', '_', '_', '_', '_', 'O', '_', '_', '_'},
              {'_', 'X', 'X', '_', '_', 'X', 'X', '_', '_', '_', 'O', '_'}});
 
+  int row = -1;
+  int line = -1;
   while (!b.solved()) {
 
     bool found = false;
 
-    b.print();
-
+    b.print(line, row);
+    line = -1;
+    row = -1;
     for (int i = 0; i < b.getSize(); i++) {
 
-      if (b.solveLineTrivial(i, true)) {
+      row = b.solveLineTrivial(i, true);
+      if (row >= 0) {
         cout << "Trivial Line: " << i << endl;
         found = true;
+        line = i;
         break;
       }
     }
@@ -390,9 +408,11 @@ int main() {
       continue;
 
     for (int i = 0; i < b.getSize(); i++) {
-      if (b.solveLineTrivial(i, false)) {
+      line = b.solveLineTrivial(i, false);
+      if (line >= 0) {
         cout << "Trivial Row: " << i << endl;
         found = true;
+        row = i;
         break;
       }
     }
@@ -401,9 +421,11 @@ int main() {
 
 
     for (int i = 0; i < b.getSize(); i++) {
-      if (b.searchNonTrivialLineSolution(i, true)) {
+      row = b.searchNonTrivialLineSolution(i, true);
+      if (row >= 0) {
         cout << "Non Trivial Line: " << i << endl;
         found = true;
+        line = i;
         break;
       }
     }
@@ -411,11 +433,13 @@ int main() {
       continue;
 
     for (int i = 0; i < b.getSize(); i++) {
-      if (b.searchNonTrivialLineSolution(i, false)) {
+      line = b.searchNonTrivialLineSolution(i, false);
+      if (line >= 0) {
         cout << "Non Trivial Row: " << i << endl;
+        row = i;
         break;
       }
     }
   }
-  b.print();
+  b.print(line,row);
 }
