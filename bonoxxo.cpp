@@ -3,11 +3,36 @@
 #include <numeric>
 #include <vector>
 #include <memory>
+#include <tuple>
 
 using namespace std;
 
 enum class CellValue { X, O, Empty };
 
+string cellToString(CellValue v) {
+  if (v == CellValue::O) {
+    return "O";
+  }
+  if (v == CellValue::X) {
+    return "X";
+  }
+  return " ";
+}
+class Solutions {
+public:
+  Solutions() = default;
+
+  bool isEmpty() { return sols_.empty(); }
+
+  void addSolution(pair<int, int> sol) { sols_.emplace_back(sol); }
+
+  bool isSolution(pair<int, int> p) {
+    return find(sols_.begin(), sols_.end(), p) != sols_.end();
+  }
+
+private:
+  vector<pair<int, int>> sols_;
+};
 class Cell {
 public:
   Cell() : c_(CellValue::Empty) {}
@@ -18,16 +43,6 @@ public:
   CellValue getValue() const { return c_; }
 
   void setValue(CellValue c) { c_ = c; }
-
-  string toString() {
-    if (c_ == CellValue::O) {
-      return "O";
-    }
-    if (c_ == CellValue::X) {
-      return "X";
-    }
-    return " ";
-  }
 
 private:
   CellValue c_;
@@ -133,18 +148,6 @@ public:
   }
 
   void setValue(unsigned i, CellValue value) { line_[i]->setValue(value); }
-
-  void print(int highlight) const {
-    int i = 0;
-    for (auto &c : line_) {
-      if (i == highlight)
-        cout << "\e[1m" << c->toString() << "\e[0m" << ' ';
-      else
-        cout << c->toString() << ' ';
-
-      i++;
-    }
-  }
 
   void setIsLine(bool is_line) {
     is_line_ = is_line;
@@ -258,7 +261,7 @@ public:
       }
     }
     vector<VLine> valid_solutions;
-    for (auto& sol : solutions) {
+    for (auto &sol : solutions) {
       sol.setIsLine(input.isLine());
       if (isLineValidSolved(sol)) {
         valid_solutions.push_back(sol);
@@ -268,12 +271,32 @@ public:
     return valid_solutions;
   }
 
-  int solveLineTrivial(unsigned line_nr, bool is_line) {
+  Solutions solveLineTrivial(unsigned line_nr, bool is_line) {
+    Solutions sol;
     VLine line = lines_[line_nr].getVLine();
     BLine bline = lines_[line_nr];
     if (!is_line) {
       line = rows_[line_nr].getVLine();
       bline = rows_[line_nr];
+    }
+
+    auto addSol = [&sol, is_line, line_nr](unsigned other_nr) {
+      if (is_line)
+        sol.addSolution({line_nr, other_nr});
+      else
+        sol.addSolution({other_nr, line_nr});
+    };
+
+    // Check if only one is missing
+    if (line.countE() == 1) {
+      CellValue n = line.countO() > line.countX() ? CellValue::X : CellValue::O;
+      for (int i = 0; i < line.size(); i++) {
+        if (line.getValue(i) == CellValue::Empty) {
+          bline.setValue(i, n);
+          addSol(i);
+          return sol;
+        }
+      }
     }
 
     CellValue prev = line.getValue(1);
@@ -288,7 +311,7 @@ public:
         else
           n = CellValue::X;
         bline.setValue(i - 2, n);
-        return i-2;
+        addSol(i - 2);
       }
 
       if (prev == prevprev && line.getValue(i) == CellValue::Empty &&
@@ -298,7 +321,7 @@ public:
         else
           n = CellValue::X;
         bline.setValue(i, n);
-        return i;
+        addSol(i);
       }
 
       if (line.getValue(i) == prevprev && prev == CellValue::Empty &&
@@ -308,17 +331,18 @@ public:
         else
           n = CellValue::X;
         bline.setValue(i - 1, n);
-        return i-1;
+        addSol(i - 1);
       }
 
       prevprev = prev;
       prev = line.getValue(i);
     }
 
-    return -1;
+    return sol;
   }
 
-  int searchNonTrivialLineSolution(int line_nr, bool is_line) {
+  Solutions searchNonTrivialLineSolution(int line_nr, bool is_line) {
+    Solutions sol;
     VLine line = lines_[line_nr].getVLine();
     BLine bline = lines_[line_nr];
     if (!is_line) {
@@ -326,15 +350,24 @@ public:
       bline = rows_[line_nr];
     }
 
-    if(line.isSolved())
-      return -1;
+    auto addSol = [&sol, is_line, line_nr](unsigned other_nr) {
+      if (is_line)
+        sol.addSolution({line_nr, other_nr});
+      else
+        sol.addSolution({other_nr, line_nr});
+    };
+
+    if (line.isSolved())
+      return sol;
     auto possible_sols = getValidSolutions(line);
 
     if (possible_sols.empty()) {
-      return false;
+      return sol;
     }
 
-    auto binary_op = [](VLine left, const VLine& right) { return (left & right); };
+    auto binary_op = [](VLine left, const VLine &right) {
+      return (left & right);
+    };
     VLine begin = possible_sols[0];
     VLine common = std::accumulate(possible_sols.begin(), possible_sols.end(),
                                    begin, binary_op);
@@ -343,23 +376,29 @@ public:
       if (line.getValue(i) == CellValue::Empty &&
           common.getValue(i) != CellValue::Empty) {
         bline.setValue(i, common.getValue(i));
-        { return i; }
+        {
+          addSol(i);
+          return sol;
+        }
       }
     }
-    return -1;
+    return sol;
   }
 
-  void print(int highlight_line, int highlight_row) {
+  void print(Solutions highlight) {
     int i = 0;
-    int high;
     for (const auto &line : lines_) {
-     if(i == highlight_line)
-       high = highlight_row;
-     else
-       high = -1;
-     line.print(high);
-     cout << endl;
-     i++;    }
+      int j = 0;
+      for (auto &c : line.getVLine().getValues()) {
+        if (highlight.isSolution({i, j}))
+          cout << "\e[1m" << cellToString(c) << "\e[0m" << ' ';
+        else
+          cout << cellToString(c) << ' ';
+        j++;
+      }
+      cout << endl;
+      i++;
+    }
     cout << "-----------------------" << endl;
 
   }
@@ -384,62 +423,48 @@ int main() {
              {'O', '_', '_', '_', '_', '_', '_', '_', 'O', '_', '_', '_'},
              {'_', 'X', 'X', '_', '_', 'X', 'X', '_', '_', '_', 'O', '_'}});
 
-  int row = -1;
-  int line = -1;
+  Solutions sol;
   while (!b.solved()) {
 
-    bool found = false;
-
-    b.print(line, row);
-    line = -1;
-    row = -1;
+    b.print(sol);
     for (int i = 0; i < b.getSize(); i++) {
-
-      row = b.solveLineTrivial(i, true);
-      if (row >= 0) {
+      sol = b.solveLineTrivial(i, true);
+      if (!sol.isEmpty()) {
         cout << "Trivial Line: " << i << endl;
-        found = true;
-        line = i;
         break;
       }
     }
 
-    if (found)
+    if (!sol.isEmpty())
       continue;
 
     for (int i = 0; i < b.getSize(); i++) {
-      line = b.solveLineTrivial(i, false);
-      if (line >= 0) {
+      sol = b.solveLineTrivial(i, false);
+      if (!sol.isEmpty()) {
         cout << "Trivial Row: " << i << endl;
-        found = true;
-        row = i;
         break;
       }
     }
-    if (found)
+    if (!sol.isEmpty())
       continue;
 
-
     for (int i = 0; i < b.getSize(); i++) {
-      row = b.searchNonTrivialLineSolution(i, true);
-      if (row >= 0) {
+      sol = b.searchNonTrivialLineSolution(i, true);
+      if (!sol.isEmpty()) {
         cout << "Non Trivial Line: " << i << endl;
-        found = true;
-        line = i;
         break;
       }
     }
-    if (found)
+    if (!sol.isEmpty())
       continue;
 
     for (int i = 0; i < b.getSize(); i++) {
-      line = b.searchNonTrivialLineSolution(i, false);
-      if (line >= 0) {
+      sol = b.searchNonTrivialLineSolution(i, false);
+      if (!sol.isEmpty()) {
         cout << "Non Trivial Row: " << i << endl;
-        row = i;
         break;
       }
     }
   }
-  b.print(line,row);
+  b.print(sol);
 }
