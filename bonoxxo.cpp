@@ -164,6 +164,7 @@ public:
   explicit Binoxxo(vector<vector<char>> input) {
     lines_.clear();
     rows_.clear();
+    line_row_combined_.clear();
     lines_ = vector<BLine>(input.size());
     rows_ = vector<BLine>(input.size());
 
@@ -184,6 +185,9 @@ public:
         lines_[i].setIsLine(true);
         rows_[j].setIsLine(false);
       }
+
+      line_row_combined_.emplace_back(i, true);
+      line_row_combined_.emplace_back(i, false);
     }
   }
 
@@ -391,7 +395,7 @@ public:
       int j = 0;
       for (auto &c : line.getVLine().getValues()) {
         if (highlight.isSolution({i, j}))
-          cout << "\e[1m" << cellToString(c) << "\e[0m" << ' ';
+          cout << "\033[1;31m" << cellToString(c) << "\033[0m" << ' ';
         else
           cout << cellToString(c) << ' ';
         j++;
@@ -403,9 +407,30 @@ public:
 
   }
 
+  vector<pair<int, bool>> getLinesAndRowsSorted()
+  {
+
+    auto sorter = [this](pair<int, bool> left, pair<int,bool> right)
+    {
+      VLine vleft = left.second ? lines_[left.first].getVLine() : rows_[left.first].getVLine();
+      VLine vright = right.second ? lines_[right.first].getVLine() : rows_[right.first].getVLine();
+
+      return vleft.countE() < vright.countE();
+    };
+
+    std::sort (line_row_combined_.begin(), line_row_combined_.end(), sorter);
+    return line_row_combined_;
+  }
+
+
+
 private:
   vector<BLine> lines_;
   vector<BLine> rows_;
+
+  vector<pair<int, bool>> line_row_combined_;
+
+
 };
 
 int main() {
@@ -448,22 +473,19 @@ int main() {
     if (!sol.isEmpty())
       continue;
 
-    for (int i = 0; i < b.getSize(); i++) {
-      sol = b.searchNonTrivialLineSolution(i, true);
-      if (!sol.isEmpty()) {
-        cout << "Non Trivial Line: " << i << endl;
-        break;
-      }
-    }
-    if (!sol.isEmpty())
-      continue;
 
-    for (int i = 0; i < b.getSize(); i++) {
-      sol = b.searchNonTrivialLineSolution(i, false);
+    vector<pair<int, bool>> linesAndRows = b.getLinesAndRowsSorted();
+    for(auto p: linesAndRows)
+    {
+      sol = b.searchNonTrivialLineSolution(p.first, p.second);
       if (!sol.isEmpty()) {
-        cout << "Non Trivial Row: " << i << endl;
+        if(p.second)
+        cout << "Non Trivial Line: " << p.first << endl;
+        else
+          cout << "Non Trivial Row: " << p.first << endl;
         break;
       }
+
     }
   }
   b.print(sol);
